@@ -1,4 +1,4 @@
-module Lib
+module Lense1
     ( someFunc
     ) where
 
