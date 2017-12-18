@@ -13,6 +13,8 @@ import Control.Arrow( (***), (&&&))
 import Control.Monad( join)
 import Data.Monoid(getFirst, First(..), Any(..), getAny, Endo(..), appEndo)
 import qualified Data.Traversable as T
+import qualified Control.Category as Cat
+import Control.Monad.Reader
 -- A lens allows us to do something to a big structure given that we know how to do something to a part of it.
 
 -- type Lens s a = forall f . Functor f => (a -> f a) -> s -> (f s)
@@ -40,6 +42,17 @@ newtype Const' a b = Const' { getConst' :: a }
 
 instance Functor (Const' m) where
   fmap _ (Const' m) = (Const' m)
+
+
+type Traversal s t a b = forall f . Applicative f => (a -> f b) -> s -> f t
+type Traversal' s a = Traversal s s a a
+
+-- FIXME: completely lost here
+class Each s t a b | s -> a, t -> b, s b -> t, t a -> s where
+  each :: Traversal s t a b
+
+instance T.Traversable t => Each (t a) (t b) a b where
+  each = T.traverse
 
 -- Int ->  Monad m => (a -> m a) -> [a] -> (a, m [a])
 
@@ -75,8 +88,17 @@ Getting r s a is a function which, given some way to get r from a, will go over 
 
 -}
 
+-- FIXME: check how we get this, from this:
+{-
 view :: Getting a s a -> s -> a
-view l s = getConst $ l Const s
+view l = getConst . l Const
+-}
+view :: MonadReader s m => Getting a s a -> m a
+view l = asks (getConst . l Const )
+
+-- FIXME: read this again
+views :: MonadReader s m => Getting r s a -> (a -> r) -> m r
+views l f = view (l . to f)
 
 over :: Setting s t a b -> (a -> b) -> s -> t
 over l f = runIdentity . l (Identity . f)
@@ -157,15 +179,7 @@ _all ref = lens get set
     set s new = map (\old -> if old == ref then new else old) s
 
 
-type Traversal s t a b = forall f . Applicative f => (a -> f b) -> s -> f t
-type Traversal' s a = Traversal s s a a
 
--- FIXME: completely lost here
-class Each s t a b | s -> a, t -> b, s b -> t, t a -> s where
-  each :: Traversal s t a b
-
-instance T.Traversable t => Each (t a) (t b) a b where
-  each = T.traverse
 
 
 _all' :: Eq a => a -> Traversal' [a] a
@@ -209,3 +223,47 @@ instance Monoid (AppendList a) where
 _head :: Traversal' [a] a
 _head f []     = pure []
 _head f (x:xs) = (:) <$> f x <*> pure xs
+
+--------------- some operators ---------------
+
+-- view flipped
+(^.) ::  s -> Getting a s a -> a
+(^.) = flip view
+
+(%~)  :: Setting s t a b -> (a -> b) -> s -> t
+(%~) = over
+
+--------------- composing --------------------
+
+-- data OldLens s a = OldLens
+--   { get    :: s -> a
+--   , modify :: (a -> a) -> s -> s }
+--
+-- (@.) :: OldLens b c -> OldLens a b -> OldLens a c
+-- (@.) _c _b = OldLens
+--   { get    = get    _c . get    _b
+--   , modify = modify _b . modify _c }
+--
+-- instance Cat.Category OldLens where
+--   id = OldLens id id
+--   (.) = (@.)
+
+ -- l1::(c -> f c) -> b -> f b
+ -- l2::(b -> f b) -> a -> f a
+ -- res:: (c -> f c) -> a -> f a
+-- type Lens' s a = forall f . Functor f => (a -> f a) -> s -> f s
+(@.) :: Lens' b c -> Lens' a b -> Lens' a c
+(@.) = flip (.)
+
+foo :: Lens' b c -> Lens' a b -> Lens' a c
+foo _c _b = \f -> _b (_c f)
+
+(&) = flip (.)
+
+-- view' (_1' . ix' 3 . ix' 1)
+view' = view . ($ id)
+
+type Getter s a = forall r . Getting r s a
+
+to :: (s -> a) -> Getter s a
+to getter f s = Const (getConst (f (getter s)))
