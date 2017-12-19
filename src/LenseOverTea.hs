@@ -15,6 +15,9 @@ import Data.Monoid(getFirst, First(..), Any(..), getAny, Endo(..), appEndo)
 import qualified Data.Traversable as T
 import qualified Control.Category as Cat
 import Control.Monad.Reader
+import Data.Functor.Contravariant
+import  Unsafe.Coerce
+
 -- A lens allows us to do something to a big structure given that we know how to do something to a part of it.
 
 -- type Lens s a = forall f . Functor f => (a -> f a) -> s -> (f s)
@@ -196,6 +199,11 @@ _all' ref f s = traverse update s
 toListOf :: Getting (Endo [a]) s a -> s -> [a]   -- this is kind of important
 toListOf l = (`appEndo` []) . getConst . l (\x -> Const (Endo (x:)))
 
+
+-- (^..) :: Getting (Endo [a]) s a -> s  -> [a]
+(^..) :: s -> Getting (Endo [a]) s a -> [a]
+(^..) = flip toListOf
+
 -- data First a = First (Maybe a)
 --
 -- instance Monoid (First a) where
@@ -261,9 +269,62 @@ foo _c _b = \f -> _b (_c f)
 (&) = flip (.)
 
 -- view' (_1' . ix' 3 . ix' 1)
-view' = view . ($ id)
+-- view' = view . ($ id)
 
-type Getter s a = forall r . Getting r s a
+type Getter s a = forall f . (Contravariant f, Functor f) => (a -> f a) -> s -> f s
 
+type Fold   s a = forall f. (Contravariant f, Applicative f) => (a -> f a) -> s -> f s
+
+newtype Folding f a = Folding { getFolding :: f a }
+
+instance (Contravariant f, Applicative f) => Monoid (Folding f a) where
+  mempty = Folding ( pure $ unsafeCoerce ()) -- FIXME: woot?
+  mappend (Folding fa) (Folding fb) = Folding (fa *> fb)
+
+
+-- coerce :: f a -> f (t a)
+-- coerce = undefined
+-- ("hello","world")^.to snd
 to :: (s -> a) -> Getter s a
-to getter f s = Const (getConst (f (getter s)))
+to getter f s =  unsafeCoerce (f (getter s))
+--  (s -> a) -> f a -> f s  contramap
+-- (s->a) -> (a -> f a) -> s -> f s
+--  to getter f s = Const (getConst (f (getter s)))
+
+folded :: (Contravariant f, Applicative f, Foldable t) =>
+          (a -> f a) -> t a -> f (t a)
+folded f s = unsafeCoerce . getFolding $ foldMap (Folding . f) s--contramap (undefined) (foldMap f s)
+
+bothF :: Fold (a, a) a
+bothF f s = unsafeCoerce . getFolding $ foldMap (Folding . f) [fst s, snd s]
+
+replicated :: Int -> Fold a a
+replicated n f s = unsafeCoerce $ sequenceA (replicate n (f s))
+
+foldCombine :: Fold s a -> Fold s a -> Fold s a
+foldCombine fa fb = \l s -> fa l s *> fb l s
+
+type Iso s t a b =
+  forall k f. (Isomorphic k, Functor f) => k (a -> f b) (s -> f t)
+
+class Isomorphic k where
+  isomorphic :: (a -> b) -> (b -> a) -> k a b
+
+instance Isomorphic (->) where
+  -- we just don't need the other direction
+  isomorphic f _ = f
+
+data Isomorphism a b = Isomorphism (a -> b) (b -> a)
+
+instance Isomorphic Isomorphism where
+  isomorphic = Isomorphism
+
+from :: Isomorphic k => Isomorphism a b -> k b a
+from (Isomorphism a b) = isomorphic b a
+
+isos :: (s -> a) -> (a -> s)      -- s <-> a
+     -> (t -> b) -> (b -> t)      -- t <-> b
+     -> Iso s t a b
+isos sa as tb bt = isomorphic
+  (\afb s -> bt <$> afb (sa s))   -- easy peasy
+  (\sft a -> tb <$> sft (as a))   -- lemon squeezy

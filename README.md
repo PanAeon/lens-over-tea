@@ -33,3 +33,6 @@ class Category cat where
 <&> as flipped of <$>
 
 -- TODO: check Reader/Writer state links.
+
+-- TODO: revisit after completing more lens tutorials
+-- and writing some lens code with Aeson
