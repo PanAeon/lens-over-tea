@@ -24,6 +24,9 @@ dependencies:
 - mtl
 - contravariant
 - lens
+- containers
+- random
+- gloss
 
 library:
   source-dirs: src
