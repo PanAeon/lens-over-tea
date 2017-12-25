@@ -14,3 +14,13 @@ https://www.schoolofhaskell.com/school/to-infinity-and-beyond/pick-of-the-week
 
 
 lifehack, bleat' ldd $(which glxgears)
+
+
+all right , TODO: convert icfpc code to lenses, solve name clashing problems inside aeson.
+
+
+
+Haskell smth:
+
+Lenses -> (Lense, Prism, Traversable, ISo)
+Profunctors, Profunctor based lenses (Mezzolens ), Indexed

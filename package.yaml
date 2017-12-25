@@ -27,14 +27,29 @@ dependencies:
 - containers
 - random
 - gloss
+- QuickCheck
+- profunctors
+- aeson
+- lens-aeson
 
 library:
   source-dirs: src
 
 executables:
-  lens-over-tea-exe:
+  pong-example-exe:
     main:                Main.hs
-    source-dirs:         app
+    source-dirs:         app/pong
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - lens-over-tea
+
+executables:
+  arcanoid-exe:
+    main:                Main.hs
+    source-dirs:         app/arcanoid
     ghc-options:
     - -threaded
     - -rtsopts
